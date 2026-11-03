@@ -1,0 +1,6 @@
+# arduino-cli build output
+build/
+*.hex
+*.elf
+*.bin
+.DS_Store
