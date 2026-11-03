@@ -76,3 +76,5 @@ List each library a project needs, with its version, in that project's README.
 | Project | Board | Description |
 |---|---|---|
 | [hello-world](hello-world/) | Arduino Uno | Blinks the built-in LED and prints to serial |
+| [motion-sensor](motion-sensor/) | Arduino Uno | Lights the built-in LED when the HC-SR501 PIR sensor detects motion |
+| [elf](elf/) | Arduino Uno | Copy of motion-sensor, starting point for a new project |

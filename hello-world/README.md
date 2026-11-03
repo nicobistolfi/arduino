@@ -4,10 +4,14 @@ The first project in this repo. It blinks the board's built-in LED once per seco
 
 ## Hardware
 
-- Arduino Uno (or any board with a `LED_BUILTIN`)
-- USB cable
+This project uses the [ELEGOO UNO R3 Most Complete Starter Kit](https://www.elegoo.com/):
 
-No extra wiring is needed.
+- ELEGOO UNO R3 board (Arduino Uno compatible)
+- USB cable (included in the kit)
+
+No extra wiring is needed. The sketch uses the board's built-in LED on pin 13.
+
+For more on blinking an LED, see lesson **2.1 LED** in the kit's tutorials (`English/Part 2/2.1 LED -UNO.pdf` in the kit download).
 
 ## Build and upload
 
