@@ -4,3 +4,11 @@ build/
 *.elf
 *.bin
 .DS_Store
+
+# Local credentials (each project commits a secrets.example.h instead)
+secrets.h
+
+# Editor swap/backup files (can contain secrets while editing)
+*.swp
+*.swo
+*~
