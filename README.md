@@ -89,4 +89,4 @@ List each library a project needs, with its version, in that project's README.
 |---|---|---|
 | [hello-world](hello-world/) | Arduino Uno | Blinks the built-in LED and prints to serial |
 | [motion-sensor](motion-sensor/) | Arduino Uno | Lights the built-in LED when the HC-SR501 PIR sensor detects motion |
-| [elf](elf/) | ESP32 Dev Module | Motion-activated light and kicking elf animatronic (relay), with WiFi, MQTT telemetry and remote commands |
+| [elf](elf/) | ESP32 Dev Module | Motion-triggered show: light, kicking elf animatronic (relay) and a sound on a DFPlayer Mini or a Mac, synchronized |
