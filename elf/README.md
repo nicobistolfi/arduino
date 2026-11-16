@@ -291,6 +291,22 @@ The ESP32 turns off WiFi power saving (`WiFi.setSleep(false)`), because modem sl
 - **`player error 6: cannot find file`** or **`5: file index out of bound`:** the track number is larger than the number of files on the card.
 - **MQTT never connects:** check `MQTT_HOST` and `MQTT_PORT`, that the broker accepts connections from the network (Mosquitto 2.x only listens on localhost unless configured otherwise), and the username and password.
 
+## Projector videos
+
+The videos for the projector scripts (`projector/projector.sh` on a Mac, `projector/projector-santa.sh` on the Pi) live in `projector/` and are stored with [Git LFS](https://git-lfs.com), since `loop.mp4` alone is about 390 MB. Install it before cloning, or the files come down as small pointer text files:
+
+```sh
+brew install git-lfs && git lfs install
+git clone git@github.com:nicobistolfi/arduino.git   # or, in an existing clone: git lfs pull
+```
+
+| File | Used for |
+|---|---|
+| `projector/santa-001.mp4` | Santa video played after the elf's audio ends (`santa-*.mp4` are picked at random) |
+| `projector/loop.mp4` | Idle loop for the projector |
+| `projector/loop-30s.mp4` | 30 s idle loop, played on repeat by `projector-santa.sh` |
+| `projector/loop-fade.mp4` | Idle loop variant with faded ends |
+
 ## Build and upload
 
 From this folder:
