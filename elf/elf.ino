@@ -46,7 +46,7 @@ const int DFPLAYER_TX_PIN   = 17;  // ESP32 UART2 TX -> 1k -> DFPlayer RX
 const int DFPLAYER_BUSY_PIN = 4;   // DFPlayer BUSY: LOW while playing
 
 // ---- Audio (DFPlayer) ----
-const uint8_t AUDIO_VOLUME = 25;   // 0..30, default; change at runtime with elf/config/set {"volume":30}
+const uint8_t AUDIO_VOLUME = 30;   // 0..30, default (max: use the speaker's volume knob); change at runtime with elf/config/set {"volume":30}
 
 // Which track plays for each kind of show. The sequence name is the show's reason
 // ("motion" = PIR, "manual" = elf/light/set ON, "test" = serial t). Track 0 = no sound for that sequence.

@@ -109,7 +109,7 @@ const SequenceTrack SEQUENCE_TRACKS[] = {
 };
 ```
 
-Volume defaults to `AUDIO_VOLUME` (25, range 0–30), also at the top of `elf.ino`. Change it at runtime with `elf/config/set` `{"volume":30}`. It takes effect immediately, even during a show. The player is set up in the background 1.5 s after boot, which is the DFPlayer's start-up time. `begin()` with ACK is tried first, then without ACK and with a reset (clone boards often don't ACK). Presence is confirmed by asking for the volume. If no player answers, the serial log says `DFPlayer NOT found` and everything else runs without it. It keeps looking every 10 s in the background, so fixing the wiring doesn't need a restart. `audio: DFPlayer found` appears when it answers. The audio code is in `audio.h` / `audio.cpp`.
+Volume defaults to `AUDIO_VOLUME` (30, the maximum; range 0–30; set the loudness with the hardware volume knob), also at the top of `elf.ino`. Change it at runtime with `elf/config/set` `{"volume":30}`. It takes effect immediately, even during a show. The player is set up in the background 1.5 s after boot, which is the DFPlayer's start-up time. `begin()` with ACK is tried first, then without ACK and with a reset (clone boards often don't ACK). Presence is confirmed by asking for the volume. If no player answers, the serial log says `DFPlayer NOT found` and everything else runs without it. It keeps looking every 10 s in the background, so fixing the wiring doesn't need a restart. `audio: DFPlayer found` appears when it answers. The audio code is in `audio.h` / `audio.cpp`.
 
 `SHOW_MS` (14340) is exactly the length of `001.mp3`, which is trimmed so the sound starts and ends right at the edges of the file. Each step is timed from the show's start, not from the previous step, so small delays in `loop()` never add up.
 
@@ -131,7 +131,7 @@ The relay is closed only in `SHOW`. Entering any other state opens it, and so do
 | `SHOW_MS` | `show_ms` | 14340 | Legs and sound duration. **Must match the sound file's length.** |
 | `AUDIO_LAG_MS` | `audio_lag_ms` | 40 | Delay from sending `play` to sound coming out of the Mac. The cue is sent this much early. |
 | `COOLDOWN_MS` | `cooldown_ms` | 5000 | Motion ignored after a show |
-| `AUDIO_VOLUME` | `volume` | 25 | DFPlayer volume, 0–30. The only key that can change during a show. |
+| `AUDIO_VOLUME` | `volume` | 30 | DFPlayer volume, 0–30. The only key that can change during a show. |
 | `KICK_MS` | (none) | 5000 | During the show, the button is held this long before each re-press |
 | `KICK_GAP_MS` | (none) | 100 | How long the button is let go between presses |
 
