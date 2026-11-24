@@ -1,6 +1,6 @@
 # elf
 
-A motion-triggered show. When the HC-SR501 PIR sensor detects motion, a light (3 LEDs on 9V, switched by a PN2222 transistor) turns on. 0.7 seconds later, an elf animatronic starts kicking and a sound starts playing on a Mac. When the sound ends, the legs stop and the light goes off at the same moment. Then motion is ignored for a 5-second cooldown. Every step prints to the serial monitor at 115200 baud with a timestamp.
+A motion-triggered show. When the HC-SR501 PIR sensor detects motion, a 12V LED spotlight (switched by an IRLB8721 MOSFET on GPIO26) turns on. 0.5 seconds later, an elf animatronic starts kicking and a sound starts playing on a Mac. When the sound ends, the legs stop and the light goes off at the same moment. Then motion is ignored for a 5-second cooldown. Every step prints to the serial monitor at 115200 baud with a timestamp.
 
 Runs on an **ESP32 Dev Module** (30-pin, CP2102 USB). It was first built on an ELEGOO UNO R3.
 
@@ -81,7 +81,7 @@ GPIO4 has the internal pull-up on, so an unconnected BUSY wire reads as "idle".
 Every show runs on one clock, starting when the light begins to turn on (t = 0):
 
 ```
-t = 0                        light starts fading up (over LEAD_MS = 0.7 s)
+t = 0                        spotlight turns on (LEAD_MS = 0.5 s before the legs)
 t = 0.7 s − AUDIO_LAG_MS     "play" sent on elf/audio, and the show's track started on the DFPlayer,
                              so the sound starts at t = 0.7 s
 t = 0.7 s                    relay closes and holds the elf's button: legs start kicking, sound starts
@@ -109,7 +109,7 @@ const SequenceTrack SEQUENCE_TRACKS[] = {
 };
 ```
 
-Volume defaults to `AUDIO_VOLUME` (30, the maximum; range 0–30; set the loudness with the hardware volume knob), also at the top of `elf.ino`. Change it at runtime with `elf/config/set` `{"volume":30}`. It takes effect immediately, even during a show. The player is set up in the background 1.5 s after boot, which is the DFPlayer's start-up time. `begin()` with ACK is tried first, then without ACK and with a reset (clone boards often don't ACK). Presence is confirmed by asking for the volume. If no player answers, the serial log says `DFPlayer NOT found` and everything else runs without it. It keeps looking every 10 s in the background, so fixing the wiring doesn't need a restart. `audio: DFPlayer found` appears when it answers. The audio code is in `audio.h` / `audio.cpp`.
+Volume defaults to `AUDIO_VOLUME` (30, the maximum; range 0–30; set the loudness with the hardware volume knob), also at the top of `elf.ino`. Change it at runtime with `elf/config/set` `{"volume":30}`. It takes effect immediately, even during a show. The player is set up in the background 1.5 s after boot, which is the DFPlayer's start-up time. `begin()` with ACK is tried first, then without ACK and with a reset (clone boards often don't ACK). Presence is confirmed by asking for the volume. If no player answers, the serial log says `DFPlayer NOT found` and everything else runs without it. It keeps looking every 3 s in the background, so fixing the wiring doesn't need a restart. `audio: DFPlayer found` appears when it answers. The audio code is in `audio.h` / `audio.cpp`.
 
 `SHOW_MS` (14340) is exactly the length of `001.mp3`, which is trimmed so the sound starts and ends right at the edges of the file. Each step is timed from the show's start, not from the previous step, so small delays in `loop()` never add up.
 
@@ -127,7 +127,7 @@ The relay is closed only in `SHOW`. Entering any other state opens it, and so do
 
 | Constant | `config/set` key | Default | Meaning |
 |---|---|---|---|
-| `LEAD_MS` | `lead_ms` | 700 | Light comes on this long before the legs and sound start |
+| `LEAD_MS` | `lead_ms` | 500 | Light comes on this long before the legs and sound start |
 | `SHOW_MS` | `show_ms` | 14340 | Legs and sound duration. **Must match the sound file's length.** |
 | `AUDIO_LAG_MS` | `audio_lag_ms` | 40 | Delay from sending `play` to sound coming out of the Mac. The cue is sent this much early. |
 | `COOLDOWN_MS` | `cooldown_ms` | 5000 | Motion ignored after a show |

@@ -19,6 +19,7 @@ void begin(int rxPin, int txPin, int busyPin, uint8_t volume);
 void update();
 
 bool ready();                    // player found and initialized
+const char* statusText();        // "DFPlayer FOUND", "DFPlayer NOT FOUND (...)" or "DFPlayer: still checking..."
 bool playTrack(uint16_t track);  // plays 000<track>.mp3 (see the SD card notes in elf.ino); false if not ready
 void stop();
 void setVolume(uint8_t volume);  // 0..30; sent on the next update() (or at init, if before it)

@@ -1,7 +1,7 @@
 // Elf: motion-triggered light + kicking elf + sound show on an ESP32, with MQTT telemetry and commands.
 //
 // When the HC-SR501 PIR sensor detects motion, one show runs on a single clock:
-//   t = 0                     light (PN2222 on GPIO26) starts fading up over LEAD_MS
+//   t = 0                     spotlight (IRLB8721 MOSFET on GPIO26) turns on (or fades up if LIGHT_FADE)
 //   t = LEAD_MS - AUDIO_LAG   "play" is published on elf/audio, so the Mac's sound starts at LEAD_MS
 //   t = LEAD_MS               relay (GPIO25) closes and holds the elf's button: legs start kicking.
 //                             The toy stops on its own after one routine even with the button held,
@@ -38,7 +38,7 @@
 
 // ---- Pins ----
 const int PIR_PIN   = 27;  // HC-SR501 OUT (jumper on H, time knob at minimum)
-const int LIGHT_PIN = 26;  // PWM -> 1k -> PN2222 base; HIGH = LEDs on
+const int LIGHT_PIN = 26;  // -> 220R -> IRLB8721 gate (10k gate-to-GND pulldown); HIGH = 12V spotlight on
 const int ELF_PIN   = 25;  // -> PN2222 -> 5V relay across the elf's "try me" button; HIGH = pressed.
                            // (D7 on the UNO version. Never use GPIO6-11 on the ESP32: they run the flash chip.)
 const int DFPLAYER_RX_PIN   = 16;  // ESP32 UART2 RX <- DFPlayer TX
@@ -64,7 +64,8 @@ const SequenceTrack SEQUENCE_TRACKS[] = {
 // ---- Timings (ms) ----
 const unsigned long WARMUP_MS    = 60000;  // PIR settle time after power-on
 // Defaults below can be changed at runtime with elf/config/set.
-const unsigned long LEAD_MS      = 700;    // light turns on (fading up) this long before the legs and sound start
+const unsigned long LEAD_MS      = 500;    // light turns on this long before the legs and sound start
+const bool LIGHT_FADE = false;             // false = spotlight snaps on at t=0 (its built-in driver doesn't dim well with PWM)
 const unsigned long SHOW_MS      = 14340;  // legs + sound duration = length of 001.mp3; light off at the end
 const unsigned long AUDIO_LAG_MS = 40;     // MQTT + Mac player delay: "play" is sent this much early
 const unsigned long COOLDOWN_MS  = 5000;   // ignore motion this long after the show ends
@@ -97,7 +98,10 @@ uint16_t showTrack = 0;            // DFPlayer track playing for this show (0 = 
 bool trackTimesShow = false;       // the show ends when showTrack ends (BUSY), not after showMs
 const char* showReason = "";       // "motion" or "manual"
 int lastPir = LOW;
-bool armed = false;                // PIR warm-up finished
+bool pirNeedsLow = false;          // after a show, PIR must read LOW once before the next motion counts
+const unsigned long PREVIEW_MS = 5000;  // length of the serial "p" sound check
+unsigned long previewUntil = 0;         // millis() when the preview stops (0 = none running)
+bool armed = false;               // PIR warm-up finished
 bool autoMode = true;              // false = motion does not start shows (elf/mode/set OFF)
 int brightness = 0;                // current PWM level, 0..255
 bool elfPressed = false;           // relay currently closed
@@ -201,9 +205,22 @@ void enterState(State next) {
   publish(TOPIC("state"), STATE_NAMES[next], true);
 }
 
+// Full on and off drive the pin as plain GPIO: analogWrite(255) is still ~99.6% PWM, which the
+// spotlight's built-in AC/DC driver doesn't like (it runs dimmer). PWM is used only for in-between levels.
+bool lightPwm = true;  // true forces the first call to set the pin up as plain GPIO
 void setBrightness(int level) {
+  level = constrain(level, 0, 255);
+  if (level == 0 || level == 255) {
+    if (lightPwm || level != brightness) {
+      pinMode(LIGHT_PIN, OUTPUT);  // detaches the PWM channel
+      digitalWrite(LIGHT_PIN, level ? HIGH : LOW);
+      lightPwm = false;
+    }
+  } else {
+    analogWrite(LIGHT_PIN, level);
+    lightPwm = true;
+  }
   brightness = level;
-  analogWrite(LIGHT_PIN, level);
 }
 
 void pressElf(const char* reason, bool timed);
@@ -226,6 +243,7 @@ void startShowAudio() {
 
 // t = 0: the light starts turning on. Everything else in the show is timed from here.
 void startShow(const char* reason) {
+  pirNeedsLow = true;
   showT0 = millis();
   audioCued = false;
   showReason = reason;
@@ -310,6 +328,8 @@ void handleModeCommand(const char* payload);
 // Serial test commands (type the letter, then Enter):
 //   k  fires one short elf press without the PIR
 //   r  turns the motion sensor on/off: same as elf/mode/set AUTO / OFF (a running show isn't stopped)
+//   p  plays the first 5 s of the track on the DFPlayer (sound check, no elf or light)
+//   a  prints whether the DFPlayer was found
 //   t  starts a full show now, without the PIR (sequence "test"), like elf/light/set ON
 void handleSerialInput() {
   while (Serial.available() > 0) {
@@ -323,6 +343,17 @@ void handleSerialInput() {
     } else if (c == 'r' || c == 'R') {
       handleModeCommand(autoMode ? "OFF" : "AUTO");
       logLine(autoMode ? "motion sensor ON: motion starts shows" : "motion sensor OFF: motion is ignored");
+    } else if (c == 'p' || c == 'P') {
+      if (showRunning()) {
+        logLine("p ignored: a show is running");
+      } else if (!audio::ready()) {
+        logLine("p ignored: no DFPlayer");
+      } else if (audio::playTrack(trackForSequence("test"))) {
+        previewUntil = millis() + PREVIEW_MS;
+        logLine("preview: playing the first 5 s of the track");
+      }
+    } else if (c == 'a' || c == 'A') {
+      logLine(audio::statusText());
     } else if (c == 't' || c == 'T') {
       if (showRunning()) {
         logLine("t ignored: a show is already running");
@@ -452,7 +483,7 @@ void handleConfigCommand(const char* payload) {
 
   if (payload[0] != '{' || foundLead < 0 || foundShow < 0 || foundLag < 0 || foundCool < 0 ||
       foundVol < 0 || (!timing && foundVol == 0)) {
-    logLine("ignored: config/set expects JSON like {\"lead_ms\":700,\"show_ms\":14340,\"audio_lag_ms\":40,\"cooldown_ms\":5000,\"volume\":25}");
+    logLine("ignored: config/set expects JSON like {\"lead_ms\":500,\"show_ms\":14340,\"audio_lag_ms\":40,\"cooldown_ms\":5000,\"volume\":25}");
     return;
   }
   if (lead > MAX_LEAD_MS || show < MIN_SHOW_MS || show > MAX_SHOW_MS ||
@@ -569,7 +600,7 @@ void checkNetwork() {
 void setup() {
   pinMode(ELF_PIN, OUTPUT);
   digitalWrite(ELF_PIN, LOW);  // first thing: relay open at boot and through warm-up
-  pinMode(PIR_PIN, INPUT);
+  pinMode(PIR_PIN, INPUT_PULLDOWN);  // an unconnected or broken-wire PIR reads LOW instead of floating and toggling
   pinMode(LIGHT_PIN, OUTPUT);
   pinMode(LED_BUILTIN, OUTPUT);
   setBrightness(0);
@@ -597,6 +628,12 @@ void loop() {
   checkNetwork();
   handleSerialInput();
 
+  // End the serial "p" preview (also if a show started meanwhile: the show owns the player then).
+  if (previewUntil != 0 && (showRunning() || (long)(millis() - previewUntil) >= 0)) {
+    if (!showRunning()) audio::stop();
+    previewUntil = 0;
+  }
+
   unsigned long now = millis();
   unsigned long elapsed = now - stateStartedAt;
 
@@ -612,14 +649,18 @@ void loop() {
   switch (state) {
     case WARMUP:
       if (now >= WARMUP_MS) {
-        if (!armed) logLine("ARMED");
+        if (!armed) {
+          logLine("ARMED");
+          logLine(audio::statusText());  // repeated here: the boot-time line is easy to miss
+        }
         armed = true;
         enterState(IDLE);
       }
       break;
 
     case IDLE:
-      if (autoMode && pir == HIGH) {
+      if (pir == LOW) pirNeedsLow = false;
+      if (autoMode && pir == HIGH && !pirNeedsLow) {
         logLine("MOTION");
         startShow("motion");
       }
@@ -637,7 +678,7 @@ void loop() {
         enterState(SHOW);
         pressElf(showReason, false);  // legs start: held (with a short re-press every KICK_MS) until the show ends
       } else {
-        setBrightness((int)(255UL * t / leadMs));  // leadMs > 0 here, since t < leadMs
+        setBrightness(LIGHT_FADE ? (int)(255UL * t / leadMs) : 255);  // leadMs > 0 here, since t < leadMs
       }
       break;
     }

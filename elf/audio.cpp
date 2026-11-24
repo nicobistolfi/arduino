@@ -7,9 +7,11 @@ namespace audio {
 namespace {
 
 const unsigned long BOOT_WAIT_MS     = 1500;  // DFPlayer needs ~1-2 s after power-up before it answers
-const unsigned long RETRY_MS         = 10000; // if not found, look for it again this often (e.g. after a wiring fix)
+const unsigned long RETRY_MS         = 3000;  // if not found, look for it again this often (e.g. after a wiring fix)
 const unsigned long SETTLE_MS        = 100;   // after playTrack(), BUSY isn't trusted for this long
-const unsigned long BUSY_DEBOUNCE_MS = 20;    // BUSY must hold a level this long (it flickers at track start)
+const unsigned long BUSY_DEBOUNCE_MS = 20;    // BUSY must hold LOW this long to count as playing
+const unsigned long BUSY_FINISH_MS   = 400;   // ...and HIGH this long to count as finished: BUSY blips HIGH for 150-350 ms at track start
+const unsigned long START_GRACE_MS   = 1500;  // after playTrack(), isPlaying() stays true this long whatever BUSY does
 
 enum Status : uint8_t { PENDING, READY, MISSING };
 
@@ -47,7 +49,7 @@ bool tryInit(bool ack, bool reset) {
 }
 
 // First run (arg = nullptr): at boot, logs every step. Retries (arg != nullptr): log only on success,
-// so a missing player doesn't fill the log every 10 s.
+// so a missing player doesn't fill the log every 3 s.
 void initTask(void* arg) {
   bool retry = arg != nullptr;
   if (!retry) vTaskDelay(pdMS_TO_TICKS(BOOT_WAIT_MS));
@@ -68,7 +70,7 @@ void initTask(void* arg) {
     logf("ready, volume %u", sentVolume);
     status = READY;
   } else {
-    if (!retry) logf("DFPlayer NOT found: check wiring and SD card. Running without audio, looking again every 10 s.");
+    if (!retry) logf("DFPlayer NOT found: check wiring and SD card. Running without audio, looking again every 3 s.");
     status = MISSING;
   }
   vTaskDelete(nullptr);
@@ -88,8 +90,22 @@ bool ready() {
   return status == READY;
 }
 
+const char* statusText() {
+  switch (status) {
+    case READY:   return "DFPlayer FOUND";
+    case MISSING: return "DFPlayer NOT FOUND (check wiring/power/SD card; retrying every 3 s)";
+    default:      return "DFPlayer: still checking...";
+  }
+}
+
 void update() {
   unsigned long now = millis();
+  // One clear summary line, from loop() (not the init task), the first time the check has finished.
+  static bool reported = false;
+  if (!reported && status != PENDING) {
+    reported = true;
+    logf("*** %s ***", statusText());
+  }
   if (status == MISSING) {
     // Look for the player again every RETRY_MS, in the background like at boot.
     static unsigned long missingSince = 0;
@@ -113,7 +129,8 @@ void update() {
   if (raw != busyCandidate) {
     busyCandidate = raw;
     busyCandidateSince = now;
-  } else if (busyStable != busyCandidate && now - busyCandidateSince >= BUSY_DEBOUNCE_MS) {
+  } else if (busyStable != busyCandidate &&
+             now - busyCandidateSince >= (busyCandidate == HIGH ? BUSY_FINISH_MS : BUSY_DEBOUNCE_MS)) {
     busyStable = busyCandidate;
     logf("BUSY -> %s", busyStable == LOW ? "LOW (playing)" : "HIGH (idle)");
   }
@@ -166,7 +183,7 @@ void setVolume(uint8_t volume) {
 
 bool isPlaying() {
   if (!ready()) return false;
-  if (playRequested && millis() - playAt < SETTLE_MS) return true;  // just asked to play: assume it is
+  if (playRequested && millis() - playAt < START_GRACE_MS) return true;  // just asked to play: assume it is (BUSY glitches at the start)
   return busyStable == LOW;
 }
 
